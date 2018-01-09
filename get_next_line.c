@@ -1,113 +1,109 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   get_next_line.c                                    :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: amatsuk <matsuknastya@gmail.com>           +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2017/10/13 15:52:30 by amatsuk           #+#    #+#             */
-/*   Updated: 2018/01/05 12:48:09 by amatsuk          ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
-
 #include "get_next_line.h"
-#include <stdio.h>
 
-static int	read_input(int fd, char **line)
+static void ft_strextend(char **line, char *tmp)
 {
-	char	*input;
-	int		cur;
-
-	input = malloc(BUFF_SIZE + 1);
-	if ((cur = read(fd, input, BUFF_SIZE)) > 0)
+	size_t	line_len;
+	char 	*line_copy;
+	int	i;
+	int	j;
+	
+	line_len = 0;
+	if (*line)
+		line_len = ft_strlen(*line);
+	i = -1;
+	j = -1;
+	line_copy = (char*)malloc(sizeof(char) * (BUFF_SIZE + line_len + 1));
+	*(line_copy + line_len + BUFF_SIZE) = '\0';
+	while (++i < line_len)
+		*(line_copy + i) = *(*line + i);
+	free(*line);
+	while (++j < BUFF_SIZE)
 	{
-		input[cur] = '\0';
-		if (ft_strlen(*line) )
-		ft_strcat(*line, input);
-		free(input);
-		return (0);
+		*(line_copy + i) = *(tmp + j);
+		i++;
 	}
-	else
+	*line = line_copy;
+}
+
+static int	read_from_file(const int fd, char **line)
+{
+	char	*tmp;
+	int		code;
+	tmp = (char*)malloc(sizeof(char) * (BUFF_SIZE + 1));
+	if ((code = read(fd, tmp, BUFF_SIZE)) > 0)
 	{
-		free(input);
-		if (cur == -1)
-			return (-1);
+		*(tmp + code) = '\0';
+		ft_strextend(&(line[fd]), tmp);
+		free(tmp);
 		return (1);
 	}
+	*(tmp) = '\0';
+	ft_strextend(&(line[fd]), tmp);
+	free(tmp);
+	return (code);
 }
 
-static void	copy_str(char **next_line, char **line, size_t pos)
+static char *parse_line(char **line, int i)
 {
-	size_t i;
-	size_t len;
+	int		j;
+	char	*result;
+	char	*copy;
 
-	i = pos;
-	len = ft_strlen(*line);
-	(*next_line)[i] = '\0';
-	while (i > 0)
+	j = -1;
+	result = (char*)malloc(sizeof(char) * (i + 1));
+	*(result + i) = '\0';
+	while (++j < i)
+		*(result + j) = *(*line + j);
+	copy = (char*)malloc(sizeof(char) * (ft_strlen(*line) - i + 1));
+	*(copy + ft_strlen(*line) - i) = '\0';
+	j = 0;
+	while(++i < ft_strlen(*line))
 	{
-		(*next_line)[i - 1] = (*line)[i - 1];
-		i--;
-	}
-	i = 0;
-	while (++pos < len)
-	{
-		(*line)[i] = (*line)[pos];
-		i++;
-	}
-	(*line)[i] = '\0';
+		*(copy + j) = *(*line + i);
+		j++;
+ 	}
+ 	free(*line);
+ 	*line = copy;
+ 	return (result);
 }
 
-static char	*get_line(const int fd, char *line, int *err, size_t i)
+static char	*get_line(const int fd, char **lines, int *code)
 {
-	char		*next_line;
-	int			k;
+	char	*line;
+	size_t	len;
+	int		i;
 
-	while (line[i] != '\0' && line[i] != '\n')
-		i++;
-	if (line[i] == '\n')
-	{
-		next_line = (char *)malloc(sizeof(char) * (i + 1));
-		copy_str(&next_line, &line, i);
-		return (next_line);
-	}
-	k = read_input(fd, &line);
-	if (k == -1)
-		*err = 1;
-	if ((k && line[0] == '\0') || k == -1)
+	if (!*(lines + fd) || ft_strlen(lines[fd]) == 0)
+		*code = read_from_file(fd, lines);
+	if (*code == -1)
 		return (NULL);
-	if (k)
-	{
-		next_line = (char *)malloc(sizeof(char) * (i + 1));
-		copy_str(&next_line, &line, i);
-		return (next_line);
-	}
-	return (get_line(fd, line, err, i));
+	if (*code == 0 && ft_strlen(lines[fd]) == 0)
+		return (NULL);
+	i = 0;
+	while (lines[fd][i] != '\n' && lines[fd][i] != '\0')
+		i++;
+	if (lines[fd][i] == '\n')
+		return (parse_line((lines + fd), i));
+	else
+		*code = read_from_file(fd, lines);
+	return (get_line(fd, lines, code));	
 }
 
 int			get_next_line(const int fd, char **line)
 {
-	static char **rest;
+	static char **lines;
 	char		*result;
-	int			err;
-	int			i;
+	int			code;
 
-	err = 0;
-	i = -1;
-	if (fd > CHAR_SIZE || fd < 0 || BUFF_SIZE <= 0 || !line)
+	code = 0;
+	if (fd < 1 || fd > FD_LIMIT || !line || BUFF_SIZE < 1)
 		return (-1);
-	if (!rest)
-		rest = (char**)malloc(sizeof(char*) * (CHAR_SIZE + 1));
-	if (!*(rest + fd))
-	{
-		rest[fd] = (char*)malloc(sizeof(char) * (BUFF_SIZE + 1));
-		rest[fd][0] = '\0';
-	}
-	result = get_line(fd, rest[fd], &err, 0);
-	if (result == NULL && err)
-		return (-1);
-	*line = result;
-	if (result == NULL)
+	if (!lines)
+		lines = (char**)malloc(sizeof(char*) * (FD_LIMIT + 1));
+	*line = get_line(fd, lines, &code);
+	if (code == 0 && !(*line))
 		return (0);
+	if (code == -1)
+		return (-1);
 	return (1);
 }

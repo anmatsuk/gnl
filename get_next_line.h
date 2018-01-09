@@ -20,7 +20,7 @@
 # include "libft.h"
 
 # define BUFF_SIZE 128
-# define CHAR_SIZE 8192
+# define FD_LIMIT 8192
 
 int		get_next_line(const int fd, char **line);
 char	*validate_input_file(char *file);
